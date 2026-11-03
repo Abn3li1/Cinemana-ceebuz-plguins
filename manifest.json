@@ -1,12 +1,12 @@
 {
   "name": "CinemaHome Cinemana plugins",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scrapers": [
     {
       "id": "cinemana",
       "name": "Cinemana",
       "description": "Shabakaty Cinemana: films and series with Arabic subtitles. Works inside Iraq only.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "CinemaHome",
       "supportedTypes": [
         "movie",
@@ -28,7 +28,7 @@
       "id": "cee",
       "name": "Cee",
       "description": "Cee (cee.buzz): films and series with Arabic subtitles. Works inside Iraq only.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "CinemaHome",
       "supportedTypes": [
         "movie",

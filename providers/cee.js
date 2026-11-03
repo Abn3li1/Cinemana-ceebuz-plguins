@@ -40,7 +40,7 @@ function fromWikidata(tmdb, isTv) {
     .then(function (d) {
       var item = d && d.query && d.query.search && d.query.search[0] && d.query.search[0].title;
       if (!/^Q\d+$/.test(item || '')) return null;
-      return fetch(api + '&action=wbgetentities&props=labels|claims&languages=en&ids=' + item, { headers: headers })
+      return fetch(api + '&action=wbgetentities&props=labels|claims&languages=en|ar&ids=' + item, { headers: headers })
         .then(function (res) { return res.json(); })
         .then(function (e) {
           var entity = e && e.entities && e.entities[item] || {};
@@ -48,7 +48,7 @@ function fromWikidata(tmdb, isTv) {
           var date = claim('P577') || claim('P580');
           return {
             imdb: imdbOf(claim('P345')),
-            titles: [entity.labels && entity.labels.en && entity.labels.en.value].filter(Boolean),
+            titles: [entity.labels && entity.labels.en && entity.labels.en.value, entity.labels && entity.labels.ar && entity.labels.ar.value].filter(Boolean),
             year: date && date.time ? String(date.time).slice(1, 5) : ''
           };
         });
@@ -117,7 +117,8 @@ function search(titles, info, isTv, byName) {
       var list = rows(data);
       var hit = list.filter(function (x) { return info.imdb && imdbOf(x.imdbUrlRef) === info.imdb; })[0] ||
         (byName ? list.filter(function (x) {
-          return !imdbOf(x.imdbUrlRef) && (wanted.indexOf(norm(x.en_title)) >= 0 || wanted.indexOf(norm(x.ar_title)) >= 0);
+          var yearOk = !info.year || !x.year || Math.abs(Number(x.year) - Number(info.year)) <= 1;
+          return !imdbOf(x.imdbUrlRef) && yearOk && (wanted.indexOf(norm(x.en_title)) >= 0 || wanted.indexOf(norm(x.ar_title)) >= 0);
         })[0] : null);
       return hit || attempt(i + 1);
     }, function () { return attempt(i + 1); });
@@ -147,8 +148,24 @@ function animeTitles(info) {
 }
 
 // By IMDb ID first; when that finds nothing, by the anime's romaji/English names.
+// The site may know a title by its Cinemeta (IMDb) name rather than TMDB's or Wikidata's ("The Shadow Team").
+function withCinemetaName(info, isTv) {
+  if (!info.imdb) return Promise.resolve(info);
+  return getJson('https://v3-cinemeta.strem.io/meta/' + (isTv ? 'series' : 'movie') + '/' + info.imdb + '.json').then(function (d) {
+    var name = d && d.meta && d.meta.name;
+    if (name && info.titles.indexOf(name) < 0) info.titles.unshift(name);
+    if (!info.year && d && d.meta && d.meta.year) info.year = String(d.meta.year).slice(0, 4);
+    return info;
+  }, function () { return info; });
+}
+
+// By IMDb ID first; then the same names for entries without an IMDb link (Arabic series); then anime names.
 function findEntry(info, isTv) {
-  return search(info.titles.slice(0, 2), info, isTv, false).then(function (hit) {
+  return withCinemetaName(info, isTv).then(function () {
+    return search(info.titles.slice(0, 3), info, isTv, false);
+  }).then(function (hit) {
+    return hit || search(info.titles.slice(0, 3), info, isTv, true);
+  }).then(function (hit) {
     if (hit) return hit;
     return animeTitles(info).then(function (names) {
       var extra = names.filter(function (n) { return info.titles.indexOf(n) < 0; });
@@ -157,12 +174,31 @@ function findEntry(info, isTv) {
   });
 }
 
-function episodeNb(seriesNb, season, episode) {
+// Episodes before the season plus the episode, from TVmaze's season sizes (they match TMDB's: Teşkilat 14/34/31/32/37/36).
+function absoluteEpisode(imdb, season, episode) {
+  if (!imdb || Number(season) <= 1) return Promise.resolve(Number(episode));
+  return getJson('https://api.tvmaze.com/lookup/shows?imdb=' + imdb).then(function (show) {
+    return getJson('https://api.tvmaze.com/shows/' + show.id + '/episodes');
+  }).then(function (list) {
+    var before = (list || []).filter(function (e) { return e.number && e.season < Number(season); }).length;
+    return before ? before + Number(episode) : null;
+  }, function () { return null; });
+}
+
+// The episode by its season and number; a site that keeps the whole show in one season (Teşkilat: 1-191) gets the
+// absolute number instead.
+function episodeNb(seriesNb, season, episode, imdb) {
   return getJson(SITE.api + 'videoSeason/id/' + seriesNb).then(function (data) {
-    var hit = rows(data).filter(function (x) {
-      return Number(x.season || 1) === Number(season || 1) && Number(x.episodeNummer) === Number(episode || 1);
-    })[0];
-    return hit ? String(hit.nb) : null;
+    var list = rows(data);
+    var pick = function (s, e) {
+      var hit = list.filter(function (x) { return Number(x.season || 1) === Number(s) && Number(x.episodeNummer) === Number(e); })[0];
+      return hit ? String(hit.nb) : null;
+    };
+    var exact = pick(season || 1, episode || 1);
+    var seasons = {};
+    list.forEach(function (x) { seasons[Number(x.season || 1)] = true; });
+    if (exact || Number(season || 1) <= 1 || Object.keys(seasons).length !== 1) return exact;
+    return absoluteEpisode(imdb, season, episode).then(function (n) { return n ? pick(Object.keys(seasons)[0], n) : null; });
   });
 }
 
@@ -206,7 +242,7 @@ function getStreams(id, mediaType, season, episode) {
       if (!isTv) return streamsFor(String(entry.nb), title);
       // Anime IDs carry their own TMDB season (ARM); otherwise the app's season.
       var s = info.season || season || 1;
-      return episodeNb(entry.nb, s, episode || 1).then(function (nb) {
+      return episodeNb(entry.nb, s, episode || 1, info.imdb).then(function (nb) {
         if (!nb) { console.log(TAG, 'no S' + s + 'E' + episode + ' on', SITE.name); return []; }
         return streamsFor(nb, title + ' S' + s + 'E' + (episode || 1));
       });

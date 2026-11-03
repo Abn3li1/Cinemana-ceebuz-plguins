@@ -5,7 +5,7 @@ const sites=[
  {key:'cinemana',name:'Cinemana',host:'cinemana.shabakaty.cc',description:'Shabakaty Cinemana: films and series with Arabic subtitles. Works inside Iraq only.'},
  {key:'cee',name:'Cee',host:'cee.buzz',description:'Cee (cee.buzz): films and series with Arabic subtitles. Works inside Iraq only.'}
 ];
-const version='1.0.1';
+const version='1.0.2';
 mkdirSync(new URL('providers/',import.meta.url),{recursive:true});
 for(const s of sites)writeFileSync(new URL(`providers/${s.key}.js`,import.meta.url),template.replaceAll('__KEY__',s.key).replaceAll('__NAME__',s.name).replaceAll('__HOST__',s.host));
 writeFileSync(new URL('manifest.json',import.meta.url),JSON.stringify({name:'CinemaHome Cinemana plugins',version,scrapers:sites.map(s=>({

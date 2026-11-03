@@ -1,6 +1,6 @@
 # CinemaHome Cinemana plugins
 
-Nuvio/CinemaHomeTV stream plugins for Cinemana (cinemana.shabakaty.cc) and Cee (cee.buzz). Both sites answer only inside Iraq.
+Nuvio/CinemaHomeTV stream plugins for Cinemana  and Cee . Both sites answer only inside Iraq.
 
 Add this repository to the app:
 

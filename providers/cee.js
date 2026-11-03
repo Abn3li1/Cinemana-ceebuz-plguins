@@ -30,10 +30,35 @@ function imdbOf(text) {
   return m ? m[0] : null;
 }
 
-// TMDB through the key the app hands every plugin.
+// Builds without a TMDB key (CinemaHomeTV ships none): Wikidata holds the TMDB number (P4947 film, P4983 series) next
+// to the IMDb ID (P345) and the English title.
+function fromWikidata(tmdb, isTv) {
+  var api = 'https://www.wikidata.org/w/api.php?format=json&origin=*';
+  var headers = { 'Accept': 'application/json', 'User-Agent': 'CinemaHome-Cinemana-plugin/1.0' };
+  return fetch(api + '&action=query&list=search&srlimit=1&srsearch=haswbstatement:' + (isTv ? 'P4983' : 'P4947') + '=' + tmdb, { headers: headers })
+    .then(function (res) { return res.json(); })
+    .then(function (d) {
+      var item = d && d.query && d.query.search && d.query.search[0] && d.query.search[0].title;
+      if (!/^Q\d+$/.test(item || '')) return null;
+      return fetch(api + '&action=wbgetentities&props=labels|claims&languages=en&ids=' + item, { headers: headers })
+        .then(function (res) { return res.json(); })
+        .then(function (e) {
+          var entity = e && e.entities && e.entities[item] || {};
+          var claim = function (p) { var c = entity.claims && entity.claims[p] && entity.claims[p][0]; return c && c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value; };
+          var date = claim('P577') || claim('P580');
+          return {
+            imdb: imdbOf(claim('P345')),
+            titles: [entity.labels && entity.labels.en && entity.labels.en.value].filter(Boolean),
+            year: date && date.time ? String(date.time).slice(1, 5) : ''
+          };
+        });
+    });
+}
+
+// TMDB through the key the app hands every plugin, or Wikidata when the build has none.
 function fromTmdb(tmdb, isTv) {
   var key = typeof TMDB_API_KEY !== 'undefined' ? TMDB_API_KEY : '';
-  if (!key) return Promise.resolve(null);
+  if (!key) return fromWikidata(tmdb, isTv);
   var url = 'https://api.themoviedb.org/3/' + (isTv ? 'tv' : 'movie') + '/' + tmdb + '?api_key=' + key + '&append_to_response=external_ids';
   return getJson(url).then(function (d) {
     return {

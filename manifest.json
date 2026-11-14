@@ -1,6 +1,6 @@
 {
-  "name": "CinemaHome Cinemana plugins",
-  "version": "1.0.2",
+  "name": "CinemaHome plugins",
+  "version": "1.1.0",
   "scrapers": [
     {
       "id": "cinemana",
@@ -45,6 +45,46 @@
         "en"
       ],
       "logo": "https://www.google.com/s2/favicons?domain=cee.buzz&sz=256"
+    },
+    {
+      "id": "vidrift",
+      "name": "Vidrift",
+      "description": "Vidrift: films and series in original audio (HLS, up to 1080p) with Arabic and English subtitles.",
+      "version": "1.0.0",
+      "author": "CinemaHome",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vidrift.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "contentLanguage": [
+        "en"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=embed.vidrift.net&sz=256"
+    },
+    {
+      "id": "vidbolt",
+      "name": "VidBolt",
+      "description": "VidBolt: films and series (HLS, up to 1080p, H.264). Links with Hindi default audio are skipped.",
+      "version": "1.0.0",
+      "author": "CinemaHome",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vidbolt.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "contentLanguage": [
+        "en"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=vidbolt.xyz&sz=256"
     }
   ]
 }

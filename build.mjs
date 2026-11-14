@@ -11,12 +11,12 @@ const sites=[
 const siteVersion='1.0.2';
 // Sources that refuse shared servers (Cloudflare Workers), so they run on the viewer's device instead of in Reelora.
 const standalone=[
- {key:'vidrift',name:'Vidrift',host:'embed.vidrift.net',version:'1.0.0',formats:['m3u8'],contentLanguage:['en'],
+ {key:'vidrift',name:'Vidrift',host:'embed.vidrift.net',version:'1.0.1',formats:['m3u8'],contentLanguage:['en'],
   description:'Vidrift: films and series in original audio (HLS, up to 1080p) with Arabic and English subtitles.'},
- {key:'vidbolt',name:'VidBolt',host:'vidbolt.xyz',version:'1.0.0',formats:['m3u8'],contentLanguage:['en'],
+ {key:'vidbolt',name:'VidBolt',host:'vidbolt.xyz',version:'1.0.1',formats:['m3u8'],contentLanguage:['en'],
   description:'VidBolt: films and series (HLS, up to 1080p, H.264). Links with Hindi default audio are skipped.'}
 ];
-const repoVersion='1.1.0';
+const repoVersion='1.1.1';
 mkdirSync(new URL('providers/',import.meta.url),{recursive:true});
 for(const s of sites)writeFileSync(new URL(`providers/${s.key}.js`,import.meta.url),template.replaceAll('__KEY__',s.key).replaceAll('__NAME__',s.name).replaceAll('__HOST__',s.host));
 // Standalone plugins get src/card.js (Reelora's card wording) in front: the app loads one file per plugin.

@@ -7,6 +7,29 @@ function cardQuality(height) {
   return height >= 2000 ? '4K' : height ? height + 'p' : 'تلقائية';
 }
 
+// The TMDB number these sites need. The phone app hands plugins an IMDb ID (tt…) when its own TMDB lookup fails, so a
+// tt ID is looked up on Wikidata (no key): it keeps the TMDB number (P4947 film, P4983 series) next to the IMDb ID (P345),
+// and its Arabic label stands in for the title. Returns { tmdb, arTitle }; tmdb is null when no number is found.
+const CARD_WIKIDATA = 'https://www.wikidata.org/w/api.php?format=json&origin=*';
+const CARD_WIKIDATA_HEADERS = { 'Accept': 'application/json', 'User-Agent': 'CinemaHome-plugin/1.0' };
+
+async function cardIds(id, mediaType) {
+  const s = String(id || '').trim().replace(/^tmdb:/i, '').split(':')[0];
+  if (/^\d+$/.test(s)) return { tmdb: s, arTitle: null };
+  if (!/^tt\d{5,12}$/.test(s)) return { tmdb: null, arTitle: null };
+  try {
+    const found = await (await fetch(CARD_WIKIDATA + '&action=query&list=search&srlimit=1&srsearch=haswbstatement:P345=' + s, { headers: CARD_WIKIDATA_HEADERS })).json();
+    const item = found && found.query && found.query.search && found.query.search[0] && found.query.search[0].title;
+    if (!/^Q\d+$/.test(item || '')) return { tmdb: null, arTitle: null };
+    const data = await (await fetch(CARD_WIKIDATA + '&action=wbgetentities&props=labels|claims&languages=ar&ids=' + item, { headers: CARD_WIKIDATA_HEADERS })).json();
+    const entity = data && data.entities && data.entities[item] || {};
+    const claim = entity.claims && entity.claims[mediaType === 'movie' ? 'P4947' : 'P4983'];
+    const value = claim && claim[0] && claim[0].mainsnak && claim[0].mainsnak.datavalue && claim[0].mainsnak.datavalue.value;
+    const arTitle = entity.labels && entity.labels.ar && entity.labels.ar.value || null;
+    return { tmdb: /^\d+$/.test(String(value || '')) ? String(value) : null, arTitle: arTitle };
+  } catch (e) { return { tmdb: null, arTitle: null }; }
+}
+
 // Arabic title from TMDB with the app's own key; null when it cannot be had.
 async function cardTitle(tmdbId, mediaType) {
   try {
@@ -80,6 +103,9 @@ function unescapeJson(value) {
 
 async function getStreams(tmdbId, mediaType, season, episode) {
   try {
+    const ids = await cardIds(tmdbId, mediaType);
+    if (!ids.tmdb) return [];
+    tmdbId = ids.tmdb;
     const path = mediaType === 'movie' ? 'movie/' + tmdbId : 'tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1);
     const page = SITE + '/embed/' + path;
     const res = await fetch(page, { headers: { 'User-Agent': UA } });
@@ -107,7 +133,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       if (found.length >= 2) break;
     }
     const lengths = await Promise.all(found.map(f => cardLength(f.url, null, headers)));
-    const title = await titleJob;
+    const title = (await titleJob) || ids.arTitle;
     return found.map((f, i) => ({
       name: cardName('Vidrift', f.height),
       title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'Vidrift', server: f.server, seconds: lengths[i], subtitles: subtitles }),

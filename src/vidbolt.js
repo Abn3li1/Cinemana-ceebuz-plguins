@@ -20,6 +20,9 @@ function topHeight(master) {
 
 async function getStreams(tmdbId, mediaType, season, episode) {
   try {
+    const ids = await cardIds(tmdbId, mediaType);
+    if (!ids.tmdb) return [];
+    tmdbId = ids.tmdb;
     const movie = mediaType === 'movie';
     const page = SITE + '/' + (movie ? 'movie/' + tmdbId : 'tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1));
     const query = 'type=' + (movie ? 'movie' : 'tv') + '&id=' + encodeURIComponent(tmdbId) +
@@ -42,7 +45,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     }
     const label = server ? server.charAt(0).toUpperCase() + server.slice(1) : '';
     const lengths = await Promise.all(found.map(f => cardLength(f.url, f.master, f.headers)));
-    const title = await titleJob;
+    const title = (await titleJob) || ids.arTitle;
     return found.map((f, i) => ({
       name: cardName('VidBolt', f.height),
       title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'VidBolt', server: label, seconds: lengths[i], subtitles: [] }),

@@ -11,6 +11,9 @@ function unescapeJson(value) {
 
 async function getStreams(tmdbId, mediaType, season, episode) {
   try {
+    const ids = await cardIds(tmdbId, mediaType);
+    if (!ids.tmdb) return [];
+    tmdbId = ids.tmdb;
     const path = mediaType === 'movie' ? 'movie/' + tmdbId : 'tv/' + tmdbId + '/' + (season || 1) + '/' + (episode || 1);
     const page = SITE + '/embed/' + path;
     const res = await fetch(page, { headers: { 'User-Agent': UA } });
@@ -38,7 +41,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       if (found.length >= 2) break;
     }
     const lengths = await Promise.all(found.map(f => cardLength(f.url, null, headers)));
-    const title = await titleJob;
+    const title = (await titleJob) || ids.arTitle;
     return found.map((f, i) => ({
       name: cardName('Vidrift', f.height),
       title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'Vidrift', server: f.server, seconds: lengths[i], subtitles: subtitles }),

@@ -1,6 +1,6 @@
 {
   "name": "CinemaHome plugins",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "scrapers": [
     {
       "id": "cinemana",
@@ -50,7 +50,7 @@
       "id": "vidrift",
       "name": "Vidrift",
       "description": "Vidrift: films and series in original audio (HLS, up to 1080p) with Arabic and English subtitles.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "CinemaHome",
       "supportedTypes": [
         "movie",
@@ -70,7 +70,7 @@
       "id": "vidbolt",
       "name": "VidBolt",
       "description": "VidBolt: films and series (HLS, up to 1080p, H.264). Links with Hindi default audio are skipped.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "CinemaHome",
       "supportedTypes": [
         "movie",

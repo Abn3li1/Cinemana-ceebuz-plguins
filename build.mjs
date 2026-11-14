@@ -2,7 +2,7 @@
 // (src/vidrift.js, src/vidbolt.js) to providers/, and writes manifest.json.
 // To ship a change: edit src/, raise that plugin's version below (the app re-checks a plugin when its version changes),
 // run node build.mjs, commit and push. Installs fetch the repo again within 7 days, or at once on a manual refresh.
-import {readFileSync,writeFileSync,mkdirSync,copyFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 const template=readFileSync(new URL('src/template.js',import.meta.url),'utf8');
 const sites=[
  {key:'cinemana',name:'Cinemana',host:'cinemana.shabakaty.cc',description:'Shabakaty Cinemana: films and series with Arabic subtitles. Works inside Iraq only.'},
@@ -19,7 +19,9 @@ const standalone=[
 const repoVersion='1.1.0';
 mkdirSync(new URL('providers/',import.meta.url),{recursive:true});
 for(const s of sites)writeFileSync(new URL(`providers/${s.key}.js`,import.meta.url),template.replaceAll('__KEY__',s.key).replaceAll('__NAME__',s.name).replaceAll('__HOST__',s.host));
-for(const s of standalone)copyFileSync(new URL(`src/${s.key}.js`,import.meta.url),new URL(`providers/${s.key}.js`,import.meta.url));
+// Standalone plugins get src/card.js (Reelora's card wording) in front: the app loads one file per plugin.
+const card=readFileSync(new URL('src/card.js',import.meta.url),'utf8');
+for(const s of standalone)writeFileSync(new URL(`providers/${s.key}.js`,import.meta.url),card+'\n'+readFileSync(new URL(`src/${s.key}.js`,import.meta.url),'utf8'));
 const entry=(s,version,formats,contentLanguage)=>({id:s.key,name:s.name,description:s.description,version,author:'CinemaHome',
  supportedTypes:['movie','tv'],filename:`providers/${s.key}.js`,enabled:true,formats,contentLanguage,
  logo:`https://www.google.com/s2/favicons?domain=${s.host}&sz=256`});

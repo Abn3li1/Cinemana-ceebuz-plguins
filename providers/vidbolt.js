@@ -1,3 +1,72 @@
+// Shared by the standalone plugins (build.mjs puts it in front of each one): Reelora's stream card wording, so these
+// links read like Reelora's in the source list. Keep in step with cinema-addon/stream-format.mjs in the addons repo.
+// Name: "<Source>\nجودة 1080p" (the app reads "جودة 1080p" to sort and for its dead-link fallback).
+const CARD_LANGUAGE_NAMES = { en: 'الإنجليزية', fr: 'الفرنسية', es: 'الإسبانية', de: 'الألمانية', tr: 'التركية', pt: 'البرتغالية', hi: 'الهندية' };
+
+function cardQuality(height) {
+  return height >= 2000 ? '4K' : height ? height + 'p' : 'تلقائية';
+}
+
+// Arabic title from TMDB with the app's own key; null when it cannot be had.
+async function cardTitle(tmdbId, mediaType) {
+  try {
+    if (typeof TMDB_API_KEY === 'undefined' || !TMDB_API_KEY) return null;
+    const kind = mediaType === 'movie' ? 'movie' : 'tv';
+    const res = await fetch('https://api.themoviedb.org/3/' + kind + '/' + encodeURIComponent(tmdbId) + '?language=ar&api_key=' + TMDB_API_KEY);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return String(data.title || data.name || data.original_title || data.original_name || '').trim() || null;
+  } catch (e) { return null; }
+}
+
+// Length of a VOD media playlist in seconds (0 when it is not a complete one).
+function cardSeconds(playlist) {
+  const text = String(playlist || '');
+  if (text.indexOf('#EXT-X-ENDLIST') < 0) return 0;
+  let total = 0;
+  const re = /#EXTINF:([\d.]+)/g;
+  let m;
+  while ((m = re.exec(text))) total += Number(m[1]);
+  return Math.round(total);
+}
+
+// Reads the first variant of a master playlist (or the playlist itself) to get the length.
+async function cardLength(url, master, headers) {
+  try {
+    let text = master;
+    if (!text) text = await (await fetch(url, { headers: headers })).text();
+    if (/#EXT-X-STREAM-INF/.test(text)) {
+      const variant = text.split('\n').find(l => l.trim() && l.charAt(0) !== '#');
+      if (!variant) return 0;
+      text = await (await fetch(new URL(variant.trim(), url).href, { headers: headers })).text();
+    }
+    return cardSeconds(text);
+  } catch (e) { return 0; }
+}
+
+function cardDescription(o) {
+  const name = o.title || o.source;
+  const lines = [o.mediaType !== 'movie' && o.season && o.episode
+    ? '📺 ' + name + ' — الموسم ' + Number(o.season) + '، الحلقة ' + Number(o.episode)
+    : '🎬 ' + name];
+  lines.push('🔌 المصدر: ' + o.source + (o.server ? ' (' + o.server + ')' : ''));
+  const s = o.seconds || 0;
+  if (s > 0) {
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+    lines.push('⏱️ المدة: ' + (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0'));
+  }
+  const codes = [];
+  for (const sub of o.subtitles || []) if (codes.indexOf(sub.lang) < 0) codes.push(sub.lang);
+  lines.push(codes.indexOf('ar') >= 0 ? '✅ ترجمة عربية مدمجة' : '💡 استعمل إضافات الترجمة');
+  const others = codes.filter(c => c !== 'ar').map(c => CARD_LANGUAGE_NAMES[c] || c.toUpperCase());
+  if (others.length) lines.push('🗂️ لغات أخرى: ' + others.slice(0, 2).join('، ') + (others.length > 2 ? ' +' + (others.length - 2) : ''));
+  return lines.join('\n');
+}
+
+function cardName(source, height) {
+  return source + '\nجودة ' + cardQuality(height);
+}
+
 // VidBolt (vidbolt.xyz) for the CinemaHomeTV plugin runner. Runs on the viewer's device: VidBolt refuses Cloudflare
 // Workers and blocks an address after many quick requests, so it cannot sit behind one shared server, but one viewer's
 // few requests stay well under that. One API call returns the stream; hevc=0 asks for H.264 so every TV can play it.
@@ -30,21 +99,26 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     const stream = data && data.stream;
     if (!stream || !Array.isArray(stream.sources)) return [];
     const server = typeof stream.server === 'string' ? stream.server : '';
-    const out = [];
+    const titleJob = cardTitle(tmdbId, mediaType);
+    const found = [];
     for (const src of stream.sources) {
       if (!src || typeof src.url !== 'string' || !/^https:\/\//.test(src.url)) continue;
       if (defaultAudioIsHindi(src.master)) continue;
       const height = topHeight(src.master) || parseInt(String(src.quality || ''), 10) || 0;
-      out.push({
-        name: 'VidBolt',
-        title: (server ? server.charAt(0).toUpperCase() + server.slice(1) : 'VidBolt') + (src.label ? ' · ' + src.label : ''),
-        url: src.url,
-        quality: height ? height + 'p' : 'Auto',
-        headers: Object.assign({ 'User-Agent': UA, 'Referer': SITE + '/', 'Origin': SITE }, src.headers || {})
-      });
-      if (out.length >= 2) break;
+      const headers = Object.assign({ 'User-Agent': UA, 'Referer': SITE + '/', 'Origin': SITE }, src.headers || {});
+      found.push({ url: src.url, master: typeof src.master === 'string' ? src.master : null, height: height, headers: headers });
+      if (found.length >= 2) break;
     }
-    return out;
+    const label = server ? server.charAt(0).toUpperCase() + server.slice(1) : '';
+    const lengths = await Promise.all(found.map(f => cardLength(f.url, f.master, f.headers)));
+    const title = await titleJob;
+    return found.map((f, i) => ({
+      name: cardName('VidBolt', f.height),
+      title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'VidBolt', server: label, seconds: lengths[i], subtitles: [] }),
+      url: f.url,
+      quality: f.height ? f.height + 'p' : 'Auto',
+      headers: f.headers
+    }));
   } catch (e) {
     console.error('[VidBolt] ' + (e && e.message));
     return [];

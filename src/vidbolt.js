@@ -30,21 +30,26 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     const stream = data && data.stream;
     if (!stream || !Array.isArray(stream.sources)) return [];
     const server = typeof stream.server === 'string' ? stream.server : '';
-    const out = [];
+    const titleJob = cardTitle(tmdbId, mediaType);
+    const found = [];
     for (const src of stream.sources) {
       if (!src || typeof src.url !== 'string' || !/^https:\/\//.test(src.url)) continue;
       if (defaultAudioIsHindi(src.master)) continue;
       const height = topHeight(src.master) || parseInt(String(src.quality || ''), 10) || 0;
-      out.push({
-        name: 'VidBolt',
-        title: (server ? server.charAt(0).toUpperCase() + server.slice(1) : 'VidBolt') + (src.label ? ' · ' + src.label : ''),
-        url: src.url,
-        quality: height ? height + 'p' : 'Auto',
-        headers: Object.assign({ 'User-Agent': UA, 'Referer': SITE + '/', 'Origin': SITE }, src.headers || {})
-      });
-      if (out.length >= 2) break;
+      const headers = Object.assign({ 'User-Agent': UA, 'Referer': SITE + '/', 'Origin': SITE }, src.headers || {});
+      found.push({ url: src.url, master: typeof src.master === 'string' ? src.master : null, height: height, headers: headers });
+      if (found.length >= 2) break;
     }
-    return out;
+    const label = server ? server.charAt(0).toUpperCase() + server.slice(1) : '';
+    const lengths = await Promise.all(found.map(f => cardLength(f.url, f.master, f.headers)));
+    const title = await titleJob;
+    return found.map((f, i) => ({
+      name: cardName('VidBolt', f.height),
+      title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'VidBolt', server: label, seconds: lengths[i], subtitles: [] }),
+      url: f.url,
+      quality: f.height ? f.height + 'p' : 'Auto',
+      headers: f.headers
+    }));
   } catch (e) {
     console.error('[VidBolt] ' + (e && e.message));
     return [];

@@ -28,24 +28,25 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     // Arabic first.
     subtitles.sort((a, b) => (a.lang === 'ar' ? 0 : 1) - (b.lang === 'ar' ? 0 : 1));
 
-    const streams = [];
+    const titleJob = cardTitle(tmdbId, mediaType);
+    const found = [];
     const srcRe = /\{"index":\d+,"url":"(\/api\/[^"]+?\.m3u8)"[^{}]*?"name":"([^"]+)"(?:,"rungs":\[\{"width":\d+,"height":(\d+))?/g;
     while ((m = srcRe.exec(html))) {
       const name = unescapeJson(m[2]);
       if (!/original/i.test(name)) continue;
-      const height = Number(m[3]) || 0;
-      const quality = height >= 2000 ? '2160p' : height >= 1000 ? '1080p' : height >= 700 ? '720p' : height ? height + 'p' : 'Auto';
-      streams.push({
-        name: 'Vidrift',
-        title: name + (subtitles.some(s => s.lang === 'ar') ? '\n✅ ترجمة عربية' : ''),
-        url: new URL(unescapeJson(m[1]), SITE).href,
-        quality: quality,
-        headers: headers,
-        subtitles: subtitles
-      });
-      if (streams.length >= 2) break;
+      found.push({ url: new URL(unescapeJson(m[1]), SITE).href, height: Number(m[3]) || 0, server: name.split(' · ')[0] });
+      if (found.length >= 2) break;
     }
-    return streams;
+    const lengths = await Promise.all(found.map(f => cardLength(f.url, null, headers)));
+    const title = await titleJob;
+    return found.map((f, i) => ({
+      name: cardName('Vidrift', f.height),
+      title: cardDescription({ title: title, mediaType: mediaType, season: season, episode: episode, source: 'Vidrift', server: f.server, seconds: lengths[i], subtitles: subtitles }),
+      url: f.url,
+      quality: f.height ? f.height + 'p' : 'Auto',
+      headers: headers,
+      subtitles: subtitles
+    }));
   } catch (e) {
     console.error('[Vidrift] ' + (e && e.message));
     return [];
